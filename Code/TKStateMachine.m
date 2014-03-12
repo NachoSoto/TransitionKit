@@ -185,23 +185,28 @@ static NSString *TKQuoteString(NSString *string)
     if (self.initialState.didEnterStateBlock) self.initialState.didEnterStateBlock(self.initialState, nil);
 }
 
-- (BOOL)canFireEvent:(id)eventOrEventName
+- (TKEvent *)eventWithEventOrName:(id)eventOrEventName
 {
     if (! [eventOrEventName isKindOfClass:[TKEvent class]] && ![eventOrEventName isKindOfClass:[NSString class]]) [NSException raise:NSInvalidArgumentException format:@"Expected a `TKEvent` object or `NSString` object specifying the name of an event, instead got a `%@` (%@)", [eventOrEventName class], eventOrEventName];
     TKEvent *event = [eventOrEventName isKindOfClass:[TKEvent class]] ? eventOrEventName : [self eventNamed:eventOrEventName];
     if (! event) [NSException raise:NSInvalidArgumentException format:@"Cannot find an Event named '%@'", eventOrEventName];
-    return [event.sourceStates containsObject:self.currentState];
+
+    return event;
+}
+
+- (BOOL)canFireEvent:(id)eventOrEventName
+{
+    return [[self eventWithEventOrName:eventOrEventName].sourceStates containsObject:self.currentState];
 }
 
 - (BOOL)fireEvent:(id)eventOrEventName userInfo:(NSDictionary *)userInfo error:(NSError *__autoreleasing *)error
 {
     if (! self.isActive) [self activate];
-    if (! [eventOrEventName isKindOfClass:[TKEvent class]] && ![eventOrEventName isKindOfClass:[NSString class]]) [NSException raise:NSInvalidArgumentException format:@"Expected a `TKEvent` object or `NSString` object specifying the name of an event, instead got a `%@` (%@)", [eventOrEventName class], eventOrEventName];
-    TKEvent *event = [eventOrEventName isKindOfClass:[TKEvent class]] ? eventOrEventName : [self eventNamed:eventOrEventName];
-    if (! event) [NSException raise:NSInvalidArgumentException format:@"Cannot find an Event named '%@'", eventOrEventName];
+    
+    TKEvent *event = [self eventWithEventOrName:eventOrEventName];
 
     // Check that this transition is permitted
-    if (event.sourceStates != nil && ![event.sourceStates containsObject:self.currentState]) {
+    if (event.sourceStates != nil && ![self canFireEvent:event]) {
         NSString *failureReason = [NSString stringWithFormat:@"An attempt was made to fire the '%@' event while in the '%@' state, but the event can only be fired from the following states: %@", event.name, self.currentState.name, [[event.sourceStates valueForKey:@"name"] componentsJoinedByString:@", "]];
         NSDictionary *userInfo = @{ NSLocalizedDescriptionKey: @"The event cannot be fired from the current state.", NSLocalizedFailureReasonErrorKey: failureReason };
         if (error) *error = [NSError errorWithDomain:TKErrorDomain code:TKInvalidTransitionError userInfo:userInfo];
